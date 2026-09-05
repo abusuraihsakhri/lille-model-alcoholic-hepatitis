@@ -247,5 +247,73 @@ class TestFromDict:
         assert 0.0 <= result["lille_score"] <= 1.0
 
 
+# =============================================================================
+# Input Validation Tests
+# =============================================================================
+
+class TestInputValidation:
+    def test_negative_age_raises(self):
+        with pytest.raises(ValueError, match="Age must be between"):
+            calculate_lille(age=-5, albumin_day0=3.0, bilirubin_day0=10.0,
+                            bilirubin_day7=8.0, creatinine=1.0)
+
+    def test_age_too_high_raises(self):
+        with pytest.raises(ValueError, match="Age must be between"):
+            calculate_lille(age=150, albumin_day0=3.0, bilirubin_day0=10.0,
+                            bilirubin_day7=8.0, creatinine=1.0)
+
+    def test_negative_albumin_raises(self):
+        with pytest.raises(ValueError, match="Albumin must be between"):
+            calculate_lille(age=50, albumin_day0=-1.0, bilirubin_day0=10.0,
+                            bilirubin_day7=8.0, creatinine=1.0)
+
+    def test_negative_bilirubin_raises(self):
+        with pytest.raises(ValueError, match="Bilirubin day 0 must be between"):
+            calculate_lille(age=50, albumin_day0=3.0, bilirubin_day0=-5.0,
+                            bilirubin_day7=8.0, creatinine=1.0)
+
+    def test_negative_creatinine_raises(self):
+        with pytest.raises(ValueError, match="Creatinine must be between"):
+            calculate_lille(age=50, albumin_day0=3.0, bilirubin_day0=10.0,
+                            bilirubin_day7=8.0, creatinine=-1.0)
+
+    def test_valid_boundary_values(self):
+        """Boundary values should not raise."""
+        result = calculate_lille(age=0, albumin_day0=0.0, bilirubin_day0=0.0,
+                                 bilirubin_day7=0.0, creatinine=0.0)
+        assert 0.0 <= result["lille_score"] <= 1.0
+
+
+# =============================================================================
+# Error Handling Tests
+# =============================================================================
+
+class TestErrorHandling:
+    def test_batch_missing_file_raises(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            process_batch(str(tmp_path / "nonexistent.csv"), str(tmp_path / "out.csv"))
+
+    def test_batch_missing_columns_raises(self, tmp_path):
+        csv_in = tmp_path / "bad.csv"
+        csv_in.write_text("patient_id,v1,v2\nPT-101,14.5,4.2\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="Missing required columns"):
+            process_batch(str(csv_in), str(tmp_path / "out.csv"))
+
+    def test_batch_skips_invalid_rows(self, tmp_path):
+        """Rows with invalid data should be skipped, not crash the batch."""
+        csv_in = tmp_path / "mixed.csv"
+        csv_out = tmp_path / "out.csv"
+        csv_in.write_text(
+            "age,albumin_day0,bilirubin_day0,bilirubin_day7,creatinine\n"
+            "50,3.0,15.0,10.0,1.0\n"
+            "-5,3.0,15.0,10.0,1.0\n"
+            "60,2.5,20.0,15.0,1.2\n",
+            encoding="utf-8",
+        )
+        count = process_batch(str(csv_in), str(csv_out))
+        assert count == 2  # Valid rows only
+        assert csv_out.exists()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

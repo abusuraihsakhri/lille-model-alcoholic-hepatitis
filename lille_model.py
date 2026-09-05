@@ -34,6 +34,21 @@ import sys
 from typing import Dict, Any, Optional
 
 
+def _validate_lille_inputs(age: int, albumin_day0: float, bilirubin_day0: float,
+                           bilirubin_day7: float, creatinine: float) -> None:
+    """Validate input parameters for Lille score calculation."""
+    if not isinstance(age, (int, float)) or age < 0 or age > 120:
+        raise ValueError(f"Age must be between 0 and 120, got {age}")
+    if not isinstance(albumin_day0, (int, float)) or albumin_day0 < 0 or albumin_day0 > 10:
+        raise ValueError(f"Albumin must be between 0 and 10 g/dL, got {albumin_day0}")
+    if not isinstance(bilirubin_day0, (int, float)) or bilirubin_day0 < 0 or bilirubin_day0 > 100:
+        raise ValueError(f"Bilirubin day 0 must be between 0 and 100 mg/dL, got {bilirubin_day0}")
+    if not isinstance(bilirubin_day7, (int, float)) or bilirubin_day7 < 0 or bilirubin_day7 > 100:
+        raise ValueError(f"Bilirubin day 7 must be between 0 and 100 mg/dL, got {bilirubin_day7}")
+    if not isinstance(creatinine, (int, float)) or creatinine < 0 or creatinine > 30:
+        raise ValueError(f"Creatinine must be between 0 and 30 mg/dL, got {creatinine}")
+
+
 def calculate_lille(
     age: int,
     albumin_day0: float,
@@ -54,7 +69,13 @@ def calculate_lille(
     Returns:
         Dict with lille_score, logit, response category, survival estimates,
         and clinical recommendation.
+
+    Raises:
+        ValueError: If any input parameter is outside valid physiological range.
     """
+    # Validate inputs
+    _validate_lille_inputs(age, albumin_day0, bilirubin_day0, bilirubin_day7, creatinine)
+
     # Derived variables
     evolution = bilirubin_day7 - bilirubin_day0
     bilirubin_evolution = bilirubin_day0 - bilirubin_day7
@@ -131,10 +152,49 @@ def calculate_lille_from_dict(params: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def process_batch(input_csv: str, output_csv: str) -> int:
-    """Process a CSV file of patients and write Lille scores."""
+    """
+    Process a CSV file of patients and write Lille scores.
+
+    Args:
+        input_csv: Path to input CSV file with required columns:
+                  age, albumin_day0, bilirubin_day0, bilirubin_day7, creatinine
+        output_csv: Path to output CSV file
+
+    Returns:
+        Number of records processed
+
+    Raises:
+        FileNotFoundError: If input file does not exist
+        ValueError: If required columns are missing
+    """
+    import os
+    if not os.path.isfile(input_csv):
+        raise FileNotFoundError(f"Input file not found: {input_csv}")
+
     with open(input_csv, mode="r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         fieldnames = list(reader.fieldnames or [])
+
+        # Validate required columns exist
+        required_cols = {"age", "albumin_day0", "bilirubin_day0", "bilirubin_day7", "creatinine"}
+        available_cols = set(fieldnames)
+        missing = required_cols - available_cols
+        if missing:
+            # Try alternative column names
+            alt_map = {
+                "albumin_day0": "albumin",
+                "bilirubin_day0": "bili_day0",
+                "bilirubin_day7": "bili_day7",
+            }
+            still_missing = set()
+            for col in missing:
+                if col in alt_map and alt_map[col] in available_cols:
+                    continue
+                still_missing.add(col)
+            if still_missing:
+                raise ValueError(f"Missing required columns: {still_missing}. "
+                                 f"Available columns: {fieldnames}")
+
         rows = list(reader)
 
     out_fields = fieldnames + [
@@ -142,21 +202,37 @@ def process_batch(input_csv: str, output_csv: str) -> int:
         "estimated_6m_survival_percent", "recommendation",
     ]
     out_rows = []
-    for r in rows:
-        result = calculate_lille_from_dict(r)
-        row_dict = dict(r)
-        row_dict["lille_score"] = result["lille_score"]
-        row_dict["response_category"] = result["response_category"]
-        row_dict["steroid_decision"] = result["steroid_decision"]
-        row_dict["estimated_6m_survival_percent"] = result["estimated_6m_survival_percent"]
-        row_dict["recommendation"] = result["recommendation"]
-        out_rows.append(row_dict)
+    errors = []
+    for idx, r in enumerate(rows):
+        try:
+            result = calculate_lille_from_dict(r)
+            row_dict = dict(r)
+            row_dict["lille_score"] = result["lille_score"]
+            row_dict["response_category"] = result["response_category"]
+            row_dict["steroid_decision"] = result["steroid_decision"]
+            row_dict["estimated_6m_survival_percent"] = result["estimated_6m_survival_percent"]
+            row_dict["recommendation"] = result["recommendation"]
+            out_rows.append(row_dict)
+        except (ValueError, TypeError, KeyError) as e:
+            errors.append(f"Row {idx + 1}: {e}")
+
+    if errors:
+        print(f"Warnings: {len(errors)} rows had errors:", file=sys.stderr)
+        for err in errors:
+            print(f"  {err}", file=sys.stderr)
+
+    # Ensure output directory exists
+    out_dir = os.path.dirname(output_csv)
+    if out_dir and not os.path.isdir(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
 
     with open(output_csv, mode="w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=out_fields)
         writer.writeheader()
         writer.writerows(out_rows)
     print(f"Processed {len(out_rows)} records -> {output_csv}")
+    if errors:
+        print(f"({len(errors)} rows skipped due to errors)")
     return len(out_rows)
 
 
@@ -188,6 +264,21 @@ def main(argv=None):
     p_batch.add_argument("-i", "--input", required=True, help="Input CSV file")
     p_batch.add_argument("-o", "--output", default="results.csv", help="Output CSV file")
 
+    # Audit dispatch
+    p_audit = subparsers.add_parser("audit", help="Dispatch audit task across workers")
+    p_audit.add_argument("--task-id", required=True, help="Task identifier")
+    p_audit.add_argument("--target", default="KEY-CLI-01", help="Target identifier")
+    p_audit.add_argument("--primary", type=float, default=10.0, help="Primary metric")
+    p_audit.add_argument("--secondary", type=float, default=2.0, help="Secondary metric")
+    p_audit.add_argument("--status", default="NOMINAL", help="Status descriptor")
+
+    # Chat query
+    p_chat = subparsers.add_parser("chat", help="Query the supervisory chat assistant")
+    p_chat.add_argument("query", nargs="+", help="Query text")
+
+    # Verify audit integrity
+    p_verify = subparsers.add_parser("verify-audit", help="Verify HMAC audit trail integrity")
+
     args = parser.parse_args(argv)
 
     if args.command == "single":
@@ -202,6 +293,33 @@ def main(argv=None):
 
     elif args.command == "batch":
         process_batch(args.input, args.output)
+
+    elif args.command == "audit":
+        from agents.models import SystemTaskPayload
+        from agents.supervisor import SystemSupervisor
+        supervisor = SystemSupervisor(model_provider="mock")
+        payload = SystemTaskPayload(
+            task_id=args.task_id,
+            target_identifier=args.target,
+            primary_metric=args.primary,
+            secondary_metric=args.secondary,
+            status_descriptor=args.status,
+        )
+        dossier = supervisor.process_task(payload)
+        print(json.dumps(dossier.to_dict(), indent=2, default=str))
+
+    elif args.command == "chat":
+        from agents.supervisor import SystemSupervisor
+        supervisor = SystemSupervisor(model_provider="mock")
+        query = " ".join(args.query)
+        response = supervisor.query_supervisory_chat(query)
+        print(json.dumps({"response": response}, indent=2))
+
+    elif args.command == "verify-audit":
+        from agents.base import AuditLogger
+        valid = AuditLogger.verify_integrity()
+        trail = AuditLogger.get_trail()
+        print(json.dumps({"integrity_valid": valid, "blocks_count": len(trail)}, indent=2))
 
     return 0
 

@@ -52,18 +52,22 @@ License: MIT
 - **`calculate_lille()`**: Calculate the Lille Model score for alcoholic hepatitis.
 
 Parameters:
-    age: Patient age in years
-    albumin_day0: Serum albumin at day 0 in g/dL
-    bilirubin_day0: Serum bilirubin at day 0 in mg/dL
-    bilirubin_day7: Serum bilirubin at day 7 in mg/dL
-    creatinine: Serum creatinine in mg/dL
+    age: Patient age in years (0-120)
+    albumin_day0: Serum albumin at day 0 in g/dL (0-10)
+    bilirubin_day0: Serum bilirubin at day 0 in mg/dL (0-100)
+    bilirubin_day7: Serum bilirubin at day 7 in mg/dL (0-100)
+    creatinine: Serum creatinine in mg/dL (0-30)
 
 Returns:
     Dict with lille_score, logit, response category, survival estimates,
     and clinical recommendation.
+
+Raises:
+    ValueError: If any input is outside valid physiological range.
+
 - **`calculate_lille_from_dict()`**: Calculate Lille score from a dictionary of parameters.
 - **`process_batch()`**: Process a CSV file of patients and write Lille scores.
-- **`main()`** — calculates and validates main parameters.
+- **`main()`** — CLI entry point for all commands.
 
 ---
 
@@ -81,29 +85,54 @@ Returns:
 
 ## 💻 CLI Quickstart & Usage
 
-### 1. Guided Interactive Mode
+### Installation
 ```bash
-python cli.py
+pip install -r requirements.txt
 ```
 
-### 2. Direct Parameterized Evaluation
+### 1. Single Patient Calculation
 ```bash
-python cli.py --input data.csv
+python cli.py single --age 50 --albumin-day0 3.0 --bilirubin-day0 15.0 --bilirubin-day7 10.0 --creatinine 1.0
+```
+
+### 2. Batch Processing
+```bash
+python cli.py batch -i patients.csv -o results.csv
+```
+
+### 3. Audit Task Dispatch
+```bash
+python cli.py audit --task-id TASK-001 --target KEY-001 --primary 12.0 --secondary 4.0
+```
+
+### 4. Supervisory Chat Query
+```bash
+python cli.py chat "Explain the Lille model indications"
+```
+
+### 5. Verify Audit Integrity
+```bash
+python cli.py verify-audit
 ```
 
 ### Parameter Reference
-- `--interactive`: Launch guided terminal interactive wizard.
-- `--input <path>`: Evaluate input from JSON or CSV specification.
-- `--json`: Output deterministic structured results in JSON format.
+- `single`: Calculate Lille score for a single patient
+- `batch`: Batch process CSV file
+- `audit`: Dispatch audit task across workers
+- `chat`: Query the supervisory chat assistant
+- `verify-audit`: Verify HMAC audit trail integrity
 
-### Input Data Schema
+### Input Data Schema (Batch CSV)
 
 | Field | Description | Requirement |
 |:------|:------------|:------------|
-| `Patient_ID` | Parameter / observation metric | Required |
-| `v1` | Parameter / observation metric | Required |
-| `v2` | Parameter / observation metric | Required |
-| `v3` | Parameter / observation metric | Required |
+| `age` | Patient age in years | Required |
+| `albumin_day0` | Serum albumin at day 0 (g/dL) | Required |
+| `bilirubin_day0` | Serum bilirubin at day 0 (mg/dL) | Required |
+| `bilirubin_day7` | Serum bilirubin at day 7 (mg/dL) | Required |
+| `creatinine` | Serum creatinine (mg/dL) | Required |
+
+Alternative column names supported: `albumin` (for `albumin_day0`), `bili_day0` (for `bilirubin_day0`), `bili_day7` (for `bilirubin_day7`).
 
 ---
 
@@ -114,6 +143,16 @@ python cli.py --input data.csv
 * **Air-Gapped LLM Reasoning Adapter:** Agnostic integration for local Ollama instances (`llama3`, `mistral`), Claude 3.5 Sonnet, GPT-4o, and deterministic test mocks.
 * **Active Learning Bayesian Calibration:** Dynamic tracker updating worker reliability weights and monitoring Brier calibration drift.
 * **FastAPI & Prometheus Telemetry:** Exposes OpenAPI 3.1 REST endpoints and operational Prometheus metrics (`/metrics`).
+* **Input Validation:** All physiological parameters validated against safe ranges.
+
+### Security Configuration
+
+Set a custom audit secret key via environment variable:
+```bash
+export AUDIT_SECRET_KEY="your-secure-key-here"
+```
+
+If not set, a secure random key is generated for development/testing.
 
 ---
 
@@ -128,8 +167,18 @@ pytest -v
 Execute high-throughput batch simulation benchmarks:
 
 ```bash
-python simulator.py --tasks 1000 --concurrency 8
+python simulator.py 1000
 ```
+
+### Test Coverage
+
+- **Core Formula Tests:** Verify Lille score calculation accuracy
+- **Component Tests:** Validate derived variables (evolution, renal insufficiency)
+- **Response Category Tests:** Confirm classification and survival estimates
+- **Input Validation Tests:** Verify parameter range enforcement
+- **Error Handling Tests:** Confirm graceful handling of invalid inputs
+- **Batch Processing Tests:** Validate CSV processing with error recovery
+- **Security Tests:** Verify PHI guard enforcement and audit integrity
 
 ---
 
@@ -137,5 +186,52 @@ python simulator.py --tasks 1000 --concurrency 8
 
 ```bash
 docker build -t lille-model-alcoholic-hepatitis .
-docker run -p 8000:8000 lille-model-alcoholic-hepatitis
+docker run lille-model-alcoholic-hepatitis
+```
+
+Using Docker Compose:
+
+```bash
+docker-compose up
+```
+
+To run the API server:
+```bash
+docker run -p 8000:8000 lille-model-alcoholic-hepatitis python -m agents.api
+```
+
+---
+
+## 📁 Project Structure
+
+```
+lille-model-alcoholic-hepatitis/
+├── .github/workflows/ci.yml    # CI/CD pipeline
+├── agents/                      # Multi-agent enterprise framework
+│   ├── __init__.py
+│   ├── api.py                  # FastAPI REST server
+│   ├── base.py                 # Security, PHI guard, audit trail
+│   ├── learning.py             # Bayesian calibration engine
+│   ├── llm_factory.py          # LLM provider factory
+│   ├── metrics.py              # Prometheus metrics
+│   ├── models.py               # Pydantic schemas
+│   ├── streamer.py             # WebSocket telemetry
+│   ├── supervisor.py           # Orchestrator
+│   └── workers.py              # Specialized domain workers
+├── tests/                      # Test suite
+│   ├── test_enrichment.py
+│   └── test_lille_model_alcoholic_hepatitis.py
+├── web/
+│   └── index.html              # Operations console UI
+├── cli.py                      # CLI entry point
+├── lille_model.py              # Core Lille model implementation
+├── enrichment.py               # Enrichment feature suite
+├── simulator.py                # Stress testing simulator
+├── benchmark_dataset.json      # Golden benchmark test suite
+├── openapi_spec.json           # OpenAPI specification
+├── sample.csv                  # Sample input data
+├── Dockerfile                  # Container build
+├── docker-compose.yml          # Container orchestration
+├── requirements.txt            # Python dependencies
+└── LICENSE                     # MIT License
 ```
