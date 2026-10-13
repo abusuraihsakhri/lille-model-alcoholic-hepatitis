@@ -48,6 +48,7 @@ code{background:#ecf1f7;border-radius:4px;padding:2px 5px}
 <div class="field"><label for="b0">Bilirubin, day 0 (mg/dL)</label><input id="b0" name="b0" type="number" required min="0" max="100" step="any" inputmode="decimal" autocomplete="off"></div>
 <div class="field"><label for="b7">Bilirubin, day 7 (mg/dL)</label><input id="b7" name="b7" type="number" required min="0" max="100" step="any" inputmode="decimal" autocomplete="off"></div>
 <div class="field"><label for="creatinine">Creatinine (mg/dL)</label><input id="creatinine" name="creatinine" type="number" required min="0.1" max="30" step="any" inputmode="decimal" autocomplete="off"></div>
+<div class="field"><label for="crcl">Creatinine clearance (mL/min, optional)</label><input id="crcl" name="crcl" type="number" min="0.1" max="300" step="any" inputmode="decimal" autocomplete="off"><small>Measured clearance below 40 mL/min also indicates renal insufficiency.</small></div>
 <div class="field"><label for="method">Coagulation measure</label><select id="method" name="method"><option value="pt">Prothrombin time (seconds)</option><option value="inr">INR</option></select></div>
 <div class="field wide"><label for="coag" id="coag-label">Prothrombin time (seconds)</label><input id="coag" name="coag" type="number" required min="5" max="120" step="any" inputmode="decimal" autocomplete="off"><small id="coag-help">Enter measured PT in seconds. Choose INR above to use the published INR alternative.</small></div>
 </div>
@@ -65,7 +66,7 @@ code{background:#ecf1f7;border-radius:4px;padding:2px 5px}
 </section>
 </div>
 <footer class="footer">
-<p><strong>Method:</strong> R = 3.19 − 0.101 × age + 0.147 × albumin (g/L) + 0.0165 × [day-0 − day-7 bilirubin] (µmol/L) − 0.206 × renal insufficiency − 0.0065 × baseline bilirubin (µmol/L) − 0.0096 × PT (seconds) or INR. Lille = 1 / [1 + exp(R)]. Renal insufficiency is defined here as creatinine &gt; 1.3 mg/dL; the original derivation additionally considered creatinine clearance &lt; 40 mL/min, which this interface does not capture.</p>
+<p><strong>Method:</strong> R = 3.19 − 0.101 × age + 0.147 × albumin (g/L) + 0.0165 × [day-0 − day-7 bilirubin] (µmol/L) − 0.206 × renal insufficiency − 0.0065 × baseline bilirubin (µmol/L) − 0.0096 × PT (seconds) or INR. Lille = 1 / [1 + exp(R)]. Renal insufficiency is defined as creatinine &gt; 1.3 mg/dL or measured creatinine clearance &lt; 40 mL/min.</p>
 <p><strong>Reference:</strong> Louvet A et al. <em>Hepatology</em>. 2007;45:1348–1354. <a href="https://doi.org/10.1002/hep.21607" rel="noopener noreferrer">doi:10.1002/hep.21607</a>.</p>
 <p>For educational and research use; not a certified medical device.</p>
 </footer>
@@ -106,8 +107,13 @@ code{background:#ecf1f7;border-radius:4px;padding:2px 5px}
     const v = ids.map(function(id) { return Number(document.getElementById(id).value); });
     if (!v.every(Number.isFinite)) { error.textContent = "All values must be finite numbers."; return; }
     const age=v[0], albumin=v[1], b0=v[2], b7=v[3], creatinine=v[4], coag=v[5];
+    const crclInput = document.getElementById("crcl").value.trim();
+    const crcl = crclInput === "" ? null : Number(crclInput);
+    if (crcl !== null && (!Number.isFinite(crcl) || crcl < 0.1 || crcl > 300)) {
+      error.textContent = "Creatinine clearance must be between 0.1 and 300 mL/min."; return;
+    }
     const R = 3.19 - 0.101*age + 0.147*(albumin*10) + 0.0165*((b0-b7)*17.104)
-      - 0.206*(creatinine > 1.3 ? 1 : 0) - 0.0065*(b0*17.104) - 0.0096*coag;
+      - 0.206*(creatinine > 1.3 || (crcl !== null && crcl < 40) ? 1 : 0) - 0.0065*(b0*17.104) - 0.0096*coag;
     const score = R >= 0 ? (Math.exp(-R)/(1+Math.exp(-R))) : (1/(1+Math.exp(R)));
     const nonresponse = score >= 0.45;
     // Use DOM nodes/textContent, not innerHTML, for all dynamic values.
