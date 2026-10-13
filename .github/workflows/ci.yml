@@ -36,6 +36,8 @@ jobs:
           Path("/tmp/lille-calculator.js").write_text(js, encoding="utf8")
           PY
           node --check /tmp/lille-calculator.js
+      - name: Browser calculation smoke test
+        run: node tests/browser_smoke.cjs
       - name: Validate linked audit signature
         run: |
           python - <<'PY'
