@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Lille Model Alcoholic Hepatitis API",
-    "description": "Enterprise Distributed Component Platform (Clinical & Cryptographic AI) adhering to CAP / CLSI / NIST Standards.",
+    "description": "Lille clinical calculator and supplementary operational audit endpoints. Clinical calculation follows Louvet et al. (2007).",
     "version": "3.0.0-ENTERPRISE",
     "contact": {
       "name": "Dr. Abu Suraih Sakhri",
@@ -25,7 +25,7 @@
         "summary": "Prometheus operational metrics",
         "responses": {
           "200": {
-            "description": "Prometheus text metrics"
+            "description": "Operational metrics JSON"
           }
         }
       }
@@ -107,6 +107,68 @@
         "responses": {
           "200": {
             "description": "Cryptographic audit trail"
+          }
+        }
+      }
+    },
+    "/api/lille": {
+      "post": {
+        "summary": "Calculate a day-7 Lille response score",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "age": {
+                    "type": "integer"
+                  },
+                  "albumin_day0": {
+                    "type": "number",
+                    "description": "g/dL"
+                  },
+                  "bilirubin_day0": {
+                    "type": "number",
+                    "description": "mg/dL"
+                  },
+                  "bilirubin_day7": {
+                    "type": "number",
+                    "description": "mg/dL"
+                  },
+                  "creatinine": {
+                    "type": "number",
+                    "description": "mg/dL"
+                  },
+                  "pt_seconds": {
+                    "type": "number"
+                  },
+                  "inr": {
+                    "type": "number"
+                  },
+                  "creatinine_clearance": {
+                    "type": "number",
+                    "description": "Optional measured creatinine clearance (mL/min)"
+                  }
+                },
+                "required": [
+                  "age",
+                  "albumin_day0",
+                  "bilirubin_day0",
+                  "bilirubin_day7",
+                  "creatinine"
+                ],
+                "description": "Exactly one of pt_seconds or inr is required."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lille score and response classification"
+          },
+          "422": {
+            "description": "Validation error"
           }
         }
       }

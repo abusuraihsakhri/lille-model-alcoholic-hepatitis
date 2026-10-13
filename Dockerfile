@@ -19,6 +19,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Default: run single calculation example. Override for API server or other commands.
-CMD ["python", "cli.py", "single", "--age", "50", "--albumin-day0", "3.0", \
-     "--bilirubin-day0", "15.0", "--bilirubin-day7", "10.0", "--creatinine", "1.0"]
+# Serve the API by default; the CLI remains available as an override.
+CMD ["uvicorn", "agents.api:app", "--host", "0.0.0.0", "--port", "8000"]

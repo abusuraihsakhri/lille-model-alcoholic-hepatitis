@@ -1,236 +1,137 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lille Model Alcoholic Hepatitis — Operations Console</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg: #090d16;
-            --card: #111827;
-            --border: #1f293d;
-            --accent: #3b82f6;
-            --accent-glow: rgba(59, 130, 246, 0.25);
-            --text: #f3f4f6;
-            --text-muted: #9ca3af;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --success: #10b981;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            padding: 2rem;
-            min-height: 100vh;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        .header-title h1 { font-size: 1.6rem; font-weight: 700; color: #fff; }
-        .header-title p { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem; }
-        .badge {
-            display: inline-block;
-            padding: 0.3rem 0.8rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            background: var(--accent-glow);
-            color: var(--accent);
-            border: 1px solid var(--accent);
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1.2fr;
-            gap: 1.5rem;
-        }
-        .card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-        }
-        .card h2 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .form-group { margin-bottom: 1rem; }
-        label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem; }
-        input, select, textarea {
-            width: 100%;
-            padding: 0.65rem 0.9rem;
-            background: #0d1322;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: #fff;
-            font-family: inherit;
-            font-size: 0.9rem;
-        }
-        input:focus, textarea:focus { outline: none; border-color: var(--accent); }
-        .btn {
-            background: var(--accent);
-            color: #fff;
-            border: none;
-            padding: 0.7rem 1.4rem;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: 0.2s;
-            width: 100%;
-        }
-        .btn:hover { background: #2563eb; }
-        .terminal {
-            background: #060911;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            color: #10b981;
-            height: 380px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-        }
-        .metrics-bar {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .metric-box {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-        }
-        .metric-val { font-size: 1.4rem; font-weight: 700; color: #fff; margin-top: 0.25rem; }
-        .metric-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Lille model calculator for day-7 response in severe alcohol-associated hepatitis. Calculates locally in your browser.">
+<title>Lille Model | Alcohol-Associated Hepatitis</title>
+<style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#172335;--muted:#536277;--line:#d5dfeb;--blue:#124a83;--focus:#ffac33;--success:#146341;--risk:#863c0d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:900px;margin:0 auto;padding:28px 20px 60px}
+h1{font-size:clamp(1.7rem,3.5vw,2.3rem);line-height:1.2;margin:6px 0 10px}
+h2{font-size:1.12rem;margin:0 0 16px}p{margin:10px 0}a{color:var(--blue)}.eyebrow{color:var(--blue);font-size:.78rem;font-weight:750;letter-spacing:.07em;text-transform:uppercase}
+.lead{max-width:740px;color:var(--muted)}
+.layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(260px,1fr);gap:18px;margin-top:26px;align-items:start}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:0 8px 25px #17233508}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.field{min-width:0}label{display:block;font-size:.9rem;font-weight:650;margin:0 0 6px}
+input,select{width:100%;border:1.5px solid #a6b7c9;border-radius:7px;padding:11px 12px;font:inherit;background:#fff;color:var(--ink)}
+input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+small{display:block;color:var(--muted);font-size:.78rem;margin-top:4px}.wide{grid-column:1/-1}
+button{border-radius:8px;padding:12px 18px;border:0;background:var(--blue);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+button:hover{background:#0c3764}button.secondary{background:#e8eef6;color:var(--blue);margin-left:8px}
+.actions{margin-top:20px;display:flex;flex-wrap:wrap;gap:8px}.actions button.secondary{margin-left:0}
+.result{border-top:1px solid var(--line);padding-top:14px;margin-top:16px}.number{font-size:2.5rem;font-weight:800;letter-spacing:-.04em}
+.status{font-weight:700}.status.response{color:var(--success)}.status.nonresponse{color:var(--risk)}
+.note{color:var(--muted);font-size:.85rem}.notice{padding:13px;border-left:3px solid var(--blue);background:#f0f5fb;border-radius:4px;font-size:.91rem}
+#error{color:#932d2d;font-weight:600;margin-top:12px}.footer{margin-top:24px;font-size:.88rem;color:var(--muted)}
+code{background:#ecf1f7;border-radius:4px;padding:2px 5px}
+@media(max-width:710px){main{padding:20px 14px 40px}.layout{grid-template-columns:1fr}.panel{padding:18px}}
+@media(max-width:420px){.fields{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
-
-    <div class="header">
-        <div class="header-title">
-            <h1>Lille Model Alcoholic Hepatitis</h1>
-            <p>Domain: Clinical & Cryptographic AI | Standard: CAP / CLSI / NIST Standards | LabMind-Atlas Architecture</p>
-        </div>
-        <div>
-            <span class="badge">Air-Gapped Active</span>
-            <span class="badge" style="background: rgba(16,185,129,0.2); color: #10b981; border-color: #10b981;">Zero-PHI Guard Active</span>
-        </div>
-    </div>
-
-    <div class="metrics-bar">
-        <div class="metric-box">
-            <div class="metric-label">System Status</div>
-            <div class="metric-val" style="color: var(--success);" id="m-status">OPTIMAL</div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Tasks Processed</div>
-            <div class="metric-val" id="m-tasks">142</div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">Audit Blocks Signed</div>
-            <div class="metric-val" id="m-audit">142</div>
-        </div>
-        <div class="metric-box">
-            <div class="metric-label">PHI Interceptions</div>
-            <div class="metric-val" style="color: var(--accent);" id="m-phi">0</div>
-        </div>
-    </div>
-
-    <div class="grid">
-        <div class="card">
-            <h2>⚙️ Dispatch Distributed Component Audit</h2>
-            <div class="form-group">
-                <label>Task / Sample ID</label>
-                <input type="text" id="task_id" value="TASK-2026-LIVE-01">
-            </div>
-            <div class="form-group">
-                <label>Target Identifier</label>
-                <input type="text" id="target_id" value="SPECIMEN-ALPHA-77">
-            </div>
-            <div class="form-group">
-                <label>Primary Measurement / Value</label>
-                <input type="number" id="primary_metric" value="29.4" step="0.1">
-            </div>
-            <div class="form-group">
-                <label>Secondary Metric / Kinetic Index</label>
-                <input type="number" id="secondary_metric" value="14.8" step="0.1">
-            </div>
-            <div class="form-group">
-                <label>Status / Phenotype Descriptor</label>
-                <input type="text" id="status_descriptor" value="DISCORDANT_ANOMALY">
-            </div>
-            <div class="form-group">
-                <label><input type="checkbox" id="is_critical" checked> Trigger Emergency / Critical Flag</label>
-            </div>
-            <button class="btn" onclick="runAudit()">Execute Distributed Component Audit</button>
-        </div>
-
-        <div class="card">
-            <h2>📊 Real-Time Consensus Dossier & Audit Log</h2>
-            <div class="terminal" id="outputConsole">// Lille Model Alcoholic Hepatitis Operations Console Ready
-// Connection established with Air-Gapped Supervisor
-// Cryptographic HMAC-SHA256 audit ledger loaded.
-// Ready for live task payload dispatch...</div>
-        </div>
-    </div>
-
-    <script>
-        async function runAudit() {
-            const consoleEl = document.getElementById('outputConsole');
-            consoleEl.innerText = "// Dispatching task across specialized workers...
-// Invoking InvariantQCWorker, SafetyEscalationWorker, ProtocolWorker...";
-
-            const payload = {
-                task_id: document.getElementById('task_id').value,
-                target_identifier: document.getElementById('target_id').value,
-                primary_metric: parseFloat(document.getElementById('primary_metric').value),
-                secondary_metric: parseFloat(document.getElementById('secondary_metric').value),
-                status_descriptor: document.getElementById('status_descriptor').value,
-                is_critical_flag: document.getElementById('is_critical').checked
-            };
-
-            try {
-                const res = await fetch('/api/audit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                consoleEl.innerText = JSON.stringify(data, null, 2);
-                document.getElementById('m-tasks').innerText = parseInt(document.getElementById('m-tasks').innerText) + 1;
-                document.getElementById('m-audit').innerText = parseInt(document.getElementById('m-audit').innerText) + 1;
-            } catch (err) {
-                consoleEl.innerText = "// Offline / Simulation Output:\n" + JSON.stringify({
-                    dossier_id: "DOSSIER-SIM-" + Math.floor(Math.random()*10000),
-                    system: "lille-model-alcoholic-hepatitis",
-                    domain: "Clinical & Cryptographic AI",
-                    task_id: payload.task_id,
-                    overall_urgency: payload.is_critical_flag ? "CRITICAL_STAT_PANIC" : "ELEVATED_RISK",
-                    integrity_status: "DISCORDANT_ANOMALY",
-                    alerts: [
-                        { worker: "InvariantQCWorker", alert: "Primary metric exceeds upper reference bound" },
-                        { worker: "SafetyEscalationWorker", alert: "Critical emergency interlock flag active" }
-                    ],
-                    audit_hash: "HMAC_SHA256_e83f9a72b941d6c381f9"
-                }, null, 2);
-            }
-        }
-    </script>
+<main>
+<header>
+<div class="eyebrow">Clinical scoring · Day 7</div>
+<h1>Lille Model</h1>
+<p class="lead">Assess response to corticosteroid treatment in <strong>severe alcohol-associated hepatitis</strong>, using the published Louvet et al. (2007) equation. All calculations run locally in this page.</p>
+</header>
+<div class="layout">
+<section class="panel" aria-labelledby="inputs-heading">
+<h2 id="inputs-heading">Clinical inputs</h2>
+<form id="form">
+<div class="fields">
+<div class="field"><label for="age">Age (years)</label><input id="age" name="age" type="number" required min="18" max="120" step="1" inputmode="numeric" autocomplete="off"></div>
+<div class="field"><label for="albumin">Albumin, day 0 (g/dL)</label><input id="albumin" name="albumin" type="number" required min="0.1" max="10" step="any" inputmode="decimal" autocomplete="off"></div>
+<div class="field"><label for="b0">Bilirubin, day 0 (mg/dL)</label><input id="b0" name="b0" type="number" required min="0" max="100" step="any" inputmode="decimal" autocomplete="off"></div>
+<div class="field"><label for="b7">Bilirubin, day 7 (mg/dL)</label><input id="b7" name="b7" type="number" required min="0" max="100" step="any" inputmode="decimal" autocomplete="off"></div>
+<div class="field"><label for="creatinine">Creatinine (mg/dL)</label><input id="creatinine" name="creatinine" type="number" required min="0.1" max="30" step="any" inputmode="decimal" autocomplete="off"></div>
+<div class="field"><label for="crcl">Creatinine clearance (mL/min, optional)</label><input id="crcl" name="crcl" type="number" min="0.1" max="300" step="any" inputmode="decimal" autocomplete="off"><small>Measured clearance below 40 mL/min also indicates renal insufficiency.</small></div>
+<div class="field"><label for="method">Coagulation measure</label><select id="method" name="method"><option value="pt">Prothrombin time (seconds)</option><option value="inr">INR</option></select></div>
+<div class="field wide"><label for="coag" id="coag-label">Prothrombin time (seconds)</label><input id="coag" name="coag" type="number" required min="5" max="120" step="any" inputmode="decimal" autocomplete="off"><small id="coag-help">Enter measured PT in seconds. Choose INR above to use the published INR alternative.</small></div>
+</div>
+<div class="actions"><button type="submit">Calculate Lille score</button><button type="button" class="secondary" id="example">Use example</button><button type="reset" class="secondary">Clear</button></div>
+<div id="error" role="alert"></div>
+</form>
+</section>
+<section class="panel" aria-labelledby="results-heading">
+<h2 id="results-heading">Result</h2>
+<div id="result" aria-live="polite" aria-atomic="true">
+<p class="note">Enter day-0 and day-7 measurements, then calculate. A sample case is available for testing.</p>
+</div>
+<div class="notice"><strong>Clinical use:</strong> At day 7, a Lille score <strong>≥ 0.45</strong> suggests corticosteroid nonresponse. Decisions about continuing or discontinuing therapy require clinical assessment. Do not use this tool as an autonomous treatment order.</div>
+<p class="note">No patient data is sent to a server or stored in cookies or local storage. Do not enter direct identifiers.</p>
+</section>
+</div>
+<footer class="footer">
+<p><strong>Method:</strong> R = 3.19 − 0.101 × age + 0.147 × albumin (g/L) + 0.0165 × [day-0 − day-7 bilirubin] (µmol/L) − 0.206 × renal insufficiency − 0.0065 × baseline bilirubin (µmol/L) − 0.0096 × PT (seconds) or INR. Lille = 1 / [1 + exp(R)]. Renal insufficiency is defined as creatinine &gt; 1.3 mg/dL or measured creatinine clearance &lt; 40 mL/min.</p>
+<p><strong>Reference:</strong> Louvet A et al. <em>Hepatology</em>. 2007;45:1348–1354. <a href="https://doi.org/10.1002/hep.21607" rel="noopener noreferrer">doi:10.1002/hep.21607</a>.</p>
+<p>For educational and research use; not a certified medical device.</p>
+</footer>
+</main>
+<script>
+(function () {
+  "use strict";
+  const ids = ["age","albumin","b0","b7","creatinine","coag"];
+  const form = document.getElementById("form");
+  const method = document.getElementById("method");
+  const result = document.getElementById("result");
+  const error = document.getElementById("error");
+  function updateMode() {
+    const inr = method.value === "inr";
+    document.getElementById("coag-label").textContent = inr ? "INR" : "Prothrombin time (seconds)";
+    document.getElementById("coag-help").textContent = inr ? "INR formula from Louvet et al. (2007)." : "Enter measured PT in seconds. Choose INR above to use the published INR alternative.";
+    const el = document.getElementById("coag");
+    el.min = inr ? "0.5" : "5";
+    el.max = inr ? "15" : "120";
+    el.value = "";
+    result.textContent = "Enter measurements and calculate.";
+  }
+  method.addEventListener("change", updateMode);
+  document.getElementById("example").addEventListener("click", function () {
+    method.value = "pt"; updateMode();
+    document.getElementById("crcl").value = "";
+    const example = [50, 3.5, 200 / 17.104, 150 / 17.104, 1.0, 18];
+    ids.forEach(function(id, i) { document.getElementById(id).value = example[i]; });
+    error.textContent = "";
+    result.textContent = "Illustrative measurements loaded; click Calculate Lille score.";
+  });
+  form.addEventListener("reset", function () {
+    method.value = "pt"; updateMode();
+    error.textContent = "";
+    result.textContent = "Enter measurements and calculate.";
+  });
+  form.addEventListener("submit", function (event) {
+    event.preventDefault(); error.textContent = "";
+    if (!form.reportValidity()) return;
+    const v = ids.map(function(id) { return Number(document.getElementById(id).value); });
+    if (!v.every(Number.isFinite)) { error.textContent = "All values must be finite numbers."; return; }
+    const age=v[0], albumin=v[1], b0=v[2], b7=v[3], creatinine=v[4], coag=v[5];
+    const crclInput = document.getElementById("crcl").value.trim();
+    const crcl = crclInput === "" ? null : Number(crclInput);
+    if (crcl !== null && (!Number.isFinite(crcl) || crcl < 0.1 || crcl > 300)) {
+      error.textContent = "Creatinine clearance must be between 0.1 and 300 mL/min."; return;
+    }
+    const R = 3.19 - 0.101*age + 0.147*(albumin*10) + 0.0165*((b0-b7)*17.104)
+      - 0.206*(creatinine > 1.3 || (crcl !== null && crcl < 40) ? 1 : 0) - 0.0065*(b0*17.104) - 0.0096*coag;
+    const score = R >= 0 ? (Math.exp(-R)/(1+Math.exp(-R))) : (1/(1+Math.exp(R)));
+    const nonresponse = score >= 0.45;
+    // Use DOM nodes/textContent, not innerHTML, for all dynamic values.
+    result.replaceChildren();
+    const number = document.createElement("div");
+    number.className="number"; number.textContent=score.toFixed(4);
+    const status = document.createElement("p");
+    status.className="status " + (nonresponse ? "nonresponse" : "response");
+    status.textContent = nonresponse ? "Nonresponse threshold reached (≥ 0.45)" : "Below nonresponse threshold (< 0.45)";
+    const detail = document.createElement("p");
+    detail.className="note";
+    detail.textContent = "Linear predictor R: " + R.toFixed(4) + ". " +
+      (nonresponse ? "Review corticosteroid discontinuation with the treating team." : "Review ongoing corticosteroid treatment with the treating team.");
+    result.append(number, status, detail);
+  });
+}());
+</script>
 </body>
 </html>

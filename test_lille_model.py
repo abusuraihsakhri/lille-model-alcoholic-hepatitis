@@ -1,319 +1,138 @@
-#!/usr/bin/env python3
-"""
-Tests for Lille Model for Alcoholic Hepatitis.
-"""
+"""Clinical reference, validation and CLI regression tests for Lille model."""
+import csv
 import json
 import math
-import sys
-import os
-import csv
 import pytest
-
-sys.path.insert(0, os.path.dirname(__file__))
 
 from lille_model import calculate_lille, calculate_lille_from_dict, process_batch, main
 
 
-# =============================================================================
-# Core Formula Tests
-# =============================================================================
-
-class TestLilleFormula:
-    def test_complete_response(self):
-        """Patient with good bilirubin response should get Lille < 0.45."""
-        result = calculate_lille(
-            age=45, albumin_day0=3.5,
-            bilirubin_day0=15.0, bilirubin_day7=8.0,
-            creatinine=0.9,
-        )
-        assert result["lille_score"] < 0.45
-        assert result["response_category"] == "Complete Response"
-        assert result["steroid_decision"] == "CONTINUE"
-
-    def test_no_response(self):
-        """Younger patient with high albumin and worsening bilirubin: Lille >= 0.56."""
-        # Parameters chosen to produce a positive logit (non-response)
-        # logit = 3.19 - 0.101*40 + 0.147*3.5 + 0.165*10 - 0.206*1
-        #         - 0.006*10 + 0.007*20 - 0.009*(-10) = 1.28
-        result = calculate_lille(
-            age=40, albumin_day0=3.5,
-            bilirubin_day0=10.0, bilirubin_day7=20.0,
-            creatinine=2.0,
-        )
-        assert result["lille_score"] >= 0.56
-        assert result["response_category"] == "No Response"
-        assert result["steroid_decision"] == "STOP"
-
-    def test_partial_response(self):
-        """Borderline response should be in partial range."""
-        result = calculate_lille(
-            age=52, albumin_day0=2.8,
-            bilirubin_day0=18.0, bilirubin_day7=14.0,
-            creatinine=1.2,
-        )
-        # This should be in the borderline range
-        assert 0.0 <= result["lille_score"] <= 1.0
-
-    def test_score_range(self):
-        """Lille score must be between 0 and 1."""
-        result = calculate_lille(
-            age=50, albumin_day0=3.0,
-            bilirubin_day0=10.0, bilirubin_day7=5.0,
-            creatinine=1.0,
-        )
-        assert 0.0 <= result["lille_score"] <= 1.0
-
-    def test_score_range_extreme_values(self):
-        """Even extreme values should produce score in 0-1 range."""
-        result = calculate_lille(
-            age=80, albumin_day0=1.0,
-            bilirubin_day0=40.0, bilirubin_day7=45.0,
-            creatinine=5.0,
-        )
-        assert 0.0 <= result["lille_score"] <= 1.0
+BASE = dict(age=50, albumin_day0=3.5, bilirubin_day0=200 / 17.104,
+            bilirubin_day7=150 / 17.104, creatinine=1.0, pt_seconds=18)
 
 
-# =============================================================================
-# Component Calculation Tests
-# =============================================================================
-
-class TestComponents:
-    def test_evolution_positive(self):
-        """Bilirubin going up: evolution > 0."""
-        result = calculate_lille(
-            age=50, albumin_day0=3.0,
-            bilirubin_day0=10.0, bilirubin_day7=15.0,
-            creatinine=1.0,
-        )
-        assert result["components"]["evolution"] == 5.0
-
-    def test_evolution_negative(self):
-        """Bilirubin going down: evolution < 0."""
-        result = calculate_lille(
-            age=50, albumin_day0=3.0,
-            bilirubin_day0=15.0, bilirubin_day7=10.0,
-            creatinine=1.0,
-        )
-        assert result["components"]["evolution"] == -5.0
-
-    def test_bilirubin_evolution(self):
-        """bilirubin_evolution = day0 - day7."""
-        result = calculate_lille(
-            age=50, albumin_day0=3.0,
-            bilirubin_day0=15.0, bilirubin_day7=10.0,
-            creatinine=1.0,
-        )
-        assert result["components"]["bilirubin_evolution"] == 5.0
-
-    def test_renal_insufficiency_positive(self):
-        """Creatinine > 1.3 triggers renal insufficiency."""
-        result = calculate_lille(
-            age=50, albumin_day0=3.0,
-            bilirubin_day0=10.0, bilirubin_day7=8.0,
-            creatinine=1.5,
-        )
-        assert result["components"]["renal_insufficiency"] == 1
-
-    def test_renal_insufficiency_negative(self):
-        """Creatinine <= 1.3 means no renal insufficiency."""
-        result = calculate_lille(
-            age=50, albumin_day0=3.0,
-            bilirubin_day0=10.0, bilirubin_day7=8.0,
-            creatinine=1.0,
-        )
-        assert result["components"]["renal_insufficiency"] == 0
-
-    def test_renal_insufficiency_boundary(self):
-        """Creatinine exactly 1.3 should NOT trigger renal insufficiency."""
-        result = calculate_lille(
-            age=50, albumin_day0=3.0,
-            bilirubin_day0=10.0, bilirubin_day7=8.0,
-            creatinine=1.3,
-        )
-        assert result["components"]["renal_insufficiency"] == 0
+def score(**changes):
+    return calculate_lille(**(BASE | changes))
 
 
-# =============================================================================
-# Logit Calculation Tests
-# =============================================================================
-
-class TestLogit:
-    def test_logit_is_numeric(self):
-        result = calculate_lille(
-            age=50, albumin_day0=3.0,
-            bilirubin_day0=10.0, bilirubin_day7=8.0,
-            creatinine=1.0,
-        )
-        assert isinstance(result["logit"], float)
-
-    def test_lille_from_logit(self):
-        """Verify Lille = 1 / (1 + e^(-logit))."""
-        result = calculate_lille(
-            age=50, albumin_day0=3.0,
-            bilirubin_day0=10.0, bilirubin_day7=8.0,
-            creatinine=1.0,
-        )
-        expected = 1.0 / (1.0 + math.exp(-result["logit"]))
-        assert abs(result["lille_score"] - round(expected, 4)) < 0.001
+def test_published_worked_example():
+    # Louvet 2007 R = 2.6372; Lille = exp(-R)/(1+exp(-R)).
+    result = score()
+    assert result["linear_predictor"] == pytest.approx(2.6372, abs=1e-5)
+    assert result["lille_score"] == pytest.approx(0.0668, abs=1e-4)
+    assert result["response_category"] == "Responder"
+    assert result["estimated_6m_survival_percent"] is None
 
 
-# =============================================================================
-# Response Category Tests
-# =============================================================================
-
-class TestResponseCategory:
-    def test_complete_response_survival(self):
-        result = calculate_lille(
-            age=45, albumin_day0=3.5,
-            bilirubin_day0=12.0, bilirubin_day7=6.0,
-            creatinine=0.8,
-        )
-        if result["lille_score"] < 0.45:
-            assert result["estimated_6m_survival_percent"] == 91.0
-
-    def test_no_response_survival(self):
-        result = calculate_lille(
-            age=60, albumin_day0=2.0,
-            bilirubin_day0=25.0, bilirubin_day7=28.0,
-            creatinine=2.5,
-        )
-        if result["lille_score"] >= 0.56:
-            assert result["estimated_6m_survival_percent"] == 25.0
+def test_independent_formula_reference():
+    p = dict(age=60, albumin_day0=2.3, bilirubin_day0=24.0,
+             bilirubin_day7=28.0, creatinine=1.8, pt_seconds=24.0)
+    r = (3.19 - 0.101*60 + 0.147*23
+         + 0.0165*((24 - 28)*17.104) - 0.206
+         - 0.0065*(24*17.104) - 0.0096*24)
+    expected = 1 / (1 + math.exp(r))
+    assert calculate_lille(**p)["lille_score"] == pytest.approx(expected, abs=0.00005)
 
 
-# =============================================================================
-# Batch Processing Tests
-# =============================================================================
-
-class TestBatch:
-    def test_batch_processing(self, tmp_path):
-        csv_in = tmp_path / "in.csv"
-        csv_out = tmp_path / "out.csv"
-        csv_in.write_text(
-            "patient_id,age,albumin_day0,bilirubin_day0,bilirubin_day7,creatinine\n"
-            "P001,45,3.5,15.0,8.0,0.9\n"
-            "P002,60,2.0,20.0,25.0,2.0\n",
-            encoding="utf-8",
-        )
-        count = process_batch(str(csv_in), str(csv_out))
-        assert count == 2
-        assert csv_out.exists()
-        content = csv_out.read_text(encoding="utf-8")
-        assert "lille_score" in content
-        assert "response_category" in content
+def test_worsening_bilirubin_increases_lille():
+    assert score(bilirubin_day7=30)["lille_score"] > score()["lille_score"]
 
 
-# =============================================================================
-# CLI Tests
-# =============================================================================
-
-class TestCLI:
-    def test_cli_single(self):
-        ret = main(["single", "--age", "50", "--albumin-day0", "3.0",
-                     "--bilirubin-day0", "15.0", "--bilirubin-day7", "10.0",
-                     "--creatinine", "1.0"])
-        assert ret == 0
-
-    def test_cli_batch(self, tmp_path):
-        csv_in = tmp_path / "in.csv"
-        csv_out = tmp_path / "out.csv"
-        csv_in.write_text(
-            "age,albumin_day0,bilirubin_day0,bilirubin_day7,creatinine\n"
-            "50,3.0,15.0,10.0,1.0\n",
-            encoding="utf-8",
-        )
-        ret = main(["batch", "-i", str(csv_in), "-o", str(csv_out)])
-        assert ret == 0
-        assert csv_out.exists()
+def test_inr_variant():
+    p = {k: v for k, v in BASE.items() if k != "pt_seconds"}
+    p["inr"] = 2.0
+    result = calculate_lille(**p)
+    assert 0 < result["lille_score"] < 1
+    assert result["components"]["coagulation_method"] == "INR"
 
 
-# =============================================================================
-# From Dict Tests
-# =============================================================================
-
-class TestFromDict:
-    def test_from_dict_basic(self):
-        params = {"age": "50", "albumin_day0": "3.0",
-                  "bilirubin_day0": "15.0", "bilirubin_day7": "10.0",
-                  "creatinine": "1.0"}
-        result = calculate_lille_from_dict(params)
-        assert 0.0 <= result["lille_score"] <= 1.0
-
-    def test_from_dict_alt_keys(self):
-        params = {"age": "50", "albumin": "3.0",
-                  "bili_day0": "15.0", "bili_day7": "10.0",
-                  "creatinine": "1.0"}
-        result = calculate_lille_from_dict(params)
-        assert 0.0 <= result["lille_score"] <= 1.0
+def test_low_creatinine_clearance_sets_renal_insufficiency():
+    assert score(creatinine=1.0, creatinine_clearance=39.9)["components"]["renal_insufficiency"] == 1
+    assert score(creatinine=1.0, creatinine_clearance=40)["components"]["renal_insufficiency"] == 0
 
 
-# =============================================================================
-# Input Validation Tests
-# =============================================================================
-
-class TestInputValidation:
-    def test_negative_age_raises(self):
-        with pytest.raises(ValueError, match="Age must be between"):
-            calculate_lille(age=-5, albumin_day0=3.0, bilirubin_day0=10.0,
-                            bilirubin_day7=8.0, creatinine=1.0)
-
-    def test_age_too_high_raises(self):
-        with pytest.raises(ValueError, match="Age must be between"):
-            calculate_lille(age=150, albumin_day0=3.0, bilirubin_day0=10.0,
-                            bilirubin_day7=8.0, creatinine=1.0)
-
-    def test_negative_albumin_raises(self):
-        with pytest.raises(ValueError, match="Albumin must be between"):
-            calculate_lille(age=50, albumin_day0=-1.0, bilirubin_day0=10.0,
-                            bilirubin_day7=8.0, creatinine=1.0)
-
-    def test_negative_bilirubin_raises(self):
-        with pytest.raises(ValueError, match="Bilirubin day 0 must be between"):
-            calculate_lille(age=50, albumin_day0=3.0, bilirubin_day0=-5.0,
-                            bilirubin_day7=8.0, creatinine=1.0)
-
-    def test_negative_creatinine_raises(self):
-        with pytest.raises(ValueError, match="Creatinine must be between"):
-            calculate_lille(age=50, albumin_day0=3.0, bilirubin_day0=10.0,
-                            bilirubin_day7=8.0, creatinine=-1.0)
-
-    def test_valid_boundary_values(self):
-        """Boundary values should not raise."""
-        result = calculate_lille(age=0, albumin_day0=0.0, bilirubin_day0=0.0,
-                                 bilirubin_day7=0.0, creatinine=0.0)
-        assert 0.0 <= result["lille_score"] <= 1.0
+def test_renal_boundary():
+    assert score(creatinine=1.3)["components"]["renal_insufficiency"] == 0
+    assert score(creatinine=1.3001)["components"]["renal_insufficiency"] == 1
 
 
-# =============================================================================
-# Error Handling Tests
-# =============================================================================
-
-class TestErrorHandling:
-    def test_batch_missing_file_raises(self, tmp_path):
-        with pytest.raises(FileNotFoundError):
-            process_batch(str(tmp_path / "nonexistent.csv"), str(tmp_path / "out.csv"))
-
-    def test_batch_missing_columns_raises(self, tmp_path):
-        csv_in = tmp_path / "bad.csv"
-        csv_in.write_text("patient_id,v1,v2\nPT-101,14.5,4.2\n", encoding="utf-8")
-        with pytest.raises(ValueError, match="Missing required columns"):
-            process_batch(str(csv_in), str(tmp_path / "out.csv"))
-
-    def test_batch_skips_invalid_rows(self, tmp_path):
-        """Rows with invalid data should be skipped, not crash the batch."""
-        csv_in = tmp_path / "mixed.csv"
-        csv_out = tmp_path / "out.csv"
-        csv_in.write_text(
-            "age,albumin_day0,bilirubin_day0,bilirubin_day7,creatinine\n"
-            "50,3.0,15.0,10.0,1.0\n"
-            "-5,3.0,15.0,10.0,1.0\n"
-            "60,2.5,20.0,15.0,1.2\n",
-            encoding="utf-8",
-        )
-        count = process_batch(str(csv_in), str(csv_out))
-        assert count == 2  # Valid rows only
-        assert csv_out.exists()
+@pytest.mark.parametrize("changes,pattern", [
+    ({"age": -1}, "Age"),
+    ({"albumin_day0": -1}, "Albumin"),
+    ({"bilirubin_day0": -1}, "Bilirubin day 0"),
+    ({"bilirubin_day7": float("nan")}, "Bilirubin day 7"),
+    ({"creatinine": float("inf")}, "Creatinine"),
+    ({"pt_seconds": None}, "exactly one"),
+    ({"pt_seconds": 18, "inr": 2}, "exactly one"),
+    ({"pt_seconds": float("nan")}, "PT"),
+    ({"pt_seconds": 0}, "PT"),
+    ({"age": True}, "Age"),
+])
+def test_invalid_inputs(changes, pattern):
+    with pytest.raises(ValueError, match=pattern):
+        score(**changes)
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+def test_missing_dictionary_input_is_rejected():
+    with pytest.raises(ValueError, match="Missing required value"):
+        calculate_lille_from_dict({"age": "50", "creatinine": "1.0", "pt_seconds": "18"})
+
+
+def test_zero_values_do_not_fall_back_to_defaults():
+    p = BASE | {"bilirubin_day7": 0}
+    assert calculate_lille_from_dict(p)["components"]["bilirubin_day7"] == 0
+
+
+def test_dictionary_aliases():
+    result = calculate_lille_from_dict({
+        "age": "50", "albumin": "3.5", "bili_day0": "12",
+        "bili_day7": "10", "creatinine": "1", "inr": "1.6"
+    })
+    assert 0 < result["lille_score"] < 1
+
+
+def test_csv_skips_invalid_without_inventing_data(tmp_path, capsys):
+    source = tmp_path / "source.csv"
+    output = tmp_path / "results.csv"
+    source.write_text(
+        "id,age,albumin_day0,bilirubin_day0,bilirubin_day7,creatinine,pt_seconds\n"
+        "good,50,3.5,12,10,1,18\n"
+        "bad,50,3.5,12,,1,18\n", encoding="utf8")
+    assert process_batch(str(source), str(output)) == 1
+    with output.open(encoding="utf8", newline="") as fh:
+        rows = list(csv.DictReader(fh))
+    assert len(rows) == 1 and rows[0]["id"] == "good"
+    assert "Row 2" in capsys.readouterr().err
+
+
+def test_csv_missing_coagulation_rejected(tmp_path):
+    source = tmp_path / "source.csv"
+    source.write_text(
+        "age,albumin_day0,bilirubin_day0,bilirubin_day7,creatinine\n"
+        "50,3.5,12,10,1\n", encoding="utf8")
+    with pytest.raises(ValueError, match="pt_seconds or inr"):
+        process_batch(str(source), str(tmp_path / "results.csv"))
+
+
+def test_cli_single_with_required_pt(capsys):
+    assert main(["single", "--age", "50", "--albumin-day0", "3.5",
+                 "--bilirubin-day0", "12", "--bilirubin-day7", "10",
+                 "--creatinine", "1", "--pt-seconds", "18"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert "lille_score" in result
+
+
+def test_cli_requires_coagulation():
+    with pytest.raises(SystemExit):
+        main(["single", "--age", "50", "--albumin-day0", "3.5",
+              "--bilirubin-day0", "12", "--bilirubin-day7", "10",
+              "--creatinine", "1"])
+
+
+def test_classification_uses_unrounded_score():
+    # A high score requires reassessment rather than a fabricated survival estimate.
+    result = calculate_lille(age=60, albumin_day0=2.0, bilirubin_day0=30,
+                             bilirubin_day7=35, creatinine=2.0, pt_seconds=24)
+    assert result["lille_score"] >= 0.45
+    assert result["response_category"] == "Non-responder"
+    assert result["steroid_decision"] == "REASSESS"
