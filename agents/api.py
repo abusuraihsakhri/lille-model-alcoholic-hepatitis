@@ -26,6 +26,7 @@ class LilleRequest(BaseModel):
     creatinine: float
     pt_seconds: float | None = None
     inr: float | None = None
+    creatinine_clearance: float | None = None
 
 
 @app.post("/api/lille")
