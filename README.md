@@ -1,237 +1,83 @@
-# Lille Model Alcoholic Hepatitis
+# Lille Model for Alcohol-Associated Hepatitis
 
-> **Domain:** Gastroenterology, Hepatology & Clinical Nutrition  
-> **Reference Guidelines & Standards:** `AASLD & ACG Clinical Practice Guidelines`
+A day-7 Lille score calculator for assessing corticosteroid response in **severe alcohol-associated hepatitis**. The browser calculator runs entirely client-side; a Python CLI and FastAPI endpoint are also available.
 
-<div align="center">
+> **Clinical caution:** This is a research and educational implementation, not a medical device or an autonomous treatment recommendation. Verify inputs and discuss treatment decisions with the treating clinical team.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
-![Audit Trail](https://img.shields.io/badge/Audit-HMAC--SHA256_Tamper--Evident-brightgreen.svg)
-![Zero-PHI Guard](https://img.shields.io/badge/Guard-Zero--PHI_Outbound-blue.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
+## Features
 
-</div>
+- Louvet et al. (2007) Lille score, range 0–1, with **nonresponse threshold ≥ 0.45**.
+- Day-0 albumin, day-0/day-7 bilirubin, age, creatinine, and **explicit PT (seconds) or INR**.
+- Correct conversion of albumin **g/dL → g/L** and bilirubin **mg/dL → µmol/L**.
+- Single-patient browser calculation, Python CLI and batch CSV processing.
+- JSON API via FastAPI at `POST /api/lille` plus separate experimental audit/demo endpoints.
+- Published-reference and edge-case regression tests, CI and static Pages deployment workflow.
 
----
+## Browser use
 
-## 📖 What It Does
+Open `web/index.html` directly or serve the repository with `python -m http.server 8080` and visit `http://localhost:8080/`. Enter all six required inputs, choose PT or INR, then select **Calculate Lille score**. The **Use example** button loads an illustrative case.
 
-Lille Model for Alcoholic Hepatitis
-Calculates the Lille score at day 7 of corticosteroid therapy to identify
-non-responders who should discontinue treatment.
+The browser does **not** transmit inputs or store them in cookies/local storage. Avoid patient identifiers. The API server, if used, is a separate deployment and does not provide authentication or regulated PHI handling.
 
-Formula:
-  logit = 3.19 - 0.101*age + 0.147*albumin_day0 + 0.165*evolution
-          - 0.206*renal_insufficiency - 0.006*bilirubin_day0
-          + 0.007*bilirubin_day7 - 0.009*bilirubin_evolution
+## Formula
 
-  Where:
-    evolution = bilirubin_day7 - bilirubin_day0
-    bilirubin_evolution = bilirubin_day0 - bilirubin_day7
-    renal_insufficiency = 1 if creatinine > 1.3 mg/dL, else 0
-
-  Lille = 1 / (1 + exp(-logit))
-
-Score range: 0-1
-
-References:
-  - Louvet A, et al. Hepatology 2007;45:1348-54.
-  - Mathurin P, et al. Gastroenterology 2002;123:1736-44.
-
-Author: Dr. Abu Suraih Sakhri
-License: MIT
-
----
-
-## ⚙️ Key Capabilities & Algorithmic Modules
-
-### 🔬 Analytical Functions
-
-- **`calculate_lille()`**: Calculate the Lille Model score for alcoholic hepatitis.
-
-Parameters:
-    age: Patient age in years (0-120)
-    albumin_day0: Serum albumin at day 0 in g/dL (0-10)
-    bilirubin_day0: Serum bilirubin at day 0 in mg/dL (0-100)
-    bilirubin_day7: Serum bilirubin at day 7 in mg/dL (0-100)
-    creatinine: Serum creatinine in mg/dL (0-30)
-
-Returns:
-    Dict with lille_score, logit, response category, survival estimates,
-    and clinical recommendation.
-
-Raises:
-    ValueError: If any input is outside valid physiological range.
-
-- **`calculate_lille_from_dict()`**: Calculate Lille score from a dictionary of parameters.
-- **`process_batch()`**: Process a CSV file of patients and write Lille scores.
-- **`main()`** — CLI entry point for all commands.
-
----
-
-## 📐 Mathematical Formulation & Logic
+For albumin in **g/L** and bilirubin in **µmol/L**, the original linear predictor is:
 
 ```text
-  Calculates the Lille score at day 7 of corticosteroid therapy to identify
-  Formula:
-  Calculate the Lille Model score for alcoholic hepatitis.
-  Lille score = 1 / (1 + e^(-logit))
-  lille_score = 1.0 / (1.0 + math.exp(-logit))
+R = 3.19 - 0.101*age + 0.147*albumin_day0
+    + 0.0165*(bilirubin_day0 - bilirubin_day7)
+    - 0.206*renal_insufficiency - 0.0065*bilirubin_day0
+    - 0.0096*PT_seconds
+
+Lille = exp(-R) / (1 + exp(-R))
 ```
 
----
+The published INR alternative substitutes INR for PT in the last term. Renal insufficiency was defined in the original model by creatinine >1.3 mg/dL **or** creatinine clearance <40 mL/min. This implementation uses **serum creatinine only** and does not accept a measured creatinine clearance. Interpret this limitation clinically.
 
-## 💻 CLI Quickstart & Usage
+Reference: Louvet A, et al. *The Lille model: A new tool for therapeutic strategy in patients with severe alcoholic hepatitis treated with steroids.* Hepatology. 2007;45:1348–1354. [doi:10.1002/hep.21607](https://doi.org/10.1002/hep.21607).
 
-### Installation
-```bash
-pip install -r requirements.txt
-```
+## Python and batch usage
 
-### 1. Single Patient Calculation
-```bash
-python cli.py single --age 50 --albumin-day0 3.0 --bilirubin-day0 15.0 --bilirubin-day7 10.0 --creatinine 1.0
-```
-
-### 2. Batch Processing
-```bash
-python cli.py batch -i patients.csv -o results.csv
-```
-
-### 3. Audit Task Dispatch
-```bash
-python cli.py audit --task-id TASK-001 --target KEY-001 --primary 12.0 --secondary 4.0
-```
-
-### 4. Supervisory Chat Query
-```bash
-python cli.py chat "Explain the Lille model indications"
-```
-
-### 5. Verify Audit Integrity
-```bash
-python cli.py verify-audit
-```
-
-### Parameter Reference
-- `single`: Calculate Lille score for a single patient
-- `batch`: Batch process CSV file
-- `audit`: Dispatch audit task across workers
-- `chat`: Query the supervisory chat assistant
-- `verify-audit`: Verify HMAC audit trail integrity
-
-### Input Data Schema (Batch CSV)
-
-| Field | Description | Requirement |
-|:------|:------------|:------------|
-| `age` | Patient age in years | Required |
-| `albumin_day0` | Serum albumin at day 0 (g/dL) | Required |
-| `bilirubin_day0` | Serum bilirubin at day 0 (mg/dL) | Required |
-| `bilirubin_day7` | Serum bilirubin at day 7 (mg/dL) | Required |
-| `creatinine` | Serum creatinine (mg/dL) | Required |
-
-Alternative column names supported: `albumin` (for `albumin_day0`), `bili_day0` (for `bilirubin_day0`), `bili_day7` (for `bilirubin_day7`).
-
----
-
-## 🛡️ Security & Enterprise Architecture
-
-* **Zero-PHI Outbound Interceptor:** Active AST and regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers.
-* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation and state transition.
-* **Air-Gapped LLM Reasoning Adapter:** Agnostic integration for local Ollama instances (`llama3`, `mistral`), Claude 3.5 Sonnet, GPT-4o, and deterministic test mocks.
-* **Active Learning Bayesian Calibration:** Dynamic tracker updating worker reliability weights and monitoring Brier calibration drift.
-* **FastAPI & Prometheus Telemetry:** Exposes OpenAPI 3.1 REST endpoints and operational Prometheus metrics (`/metrics`).
-* **Input Validation:** All physiological parameters validated against safe ranges.
-
-### Security Configuration
-
-Set a custom audit secret key via environment variable:
-```bash
-export AUDIT_SECRET_KEY="your-secure-key-here"
-```
-
-If not set, a secure random key is generated for development/testing.
-
----
-
-## 🧪 Testing & Verification
-
-Run the automated test suite:
+Python **3.10–3.12** with dependencies from `requirements.txt`:
 
 ```bash
-pytest -v
+python -m pip install -r requirements.txt
+python cli.py single --age 50 --albumin-day0 3.5 --bilirubin-day0 11.6932 --bilirubin-day7 8.7699 --creatinine 1.0 --pt-seconds 18
+python cli.py batch -i sample.csv -o results.csv
+python -m pytest -q
 ```
 
-Execute high-throughput batch simulation benchmarks:
+Use `--inr 2.0` **instead of** `--pt-seconds` when appropriate. CSV needs columns `age,albumin_day0,bilirubin_day0,bilirubin_day7,creatinine` plus `pt_seconds` (or `pt_sec` or `inr`). Aliases `albumin`, `bili_day0` and `bili_day7` are also supported. Rows with invalid/missing measurements are skipped with reported warnings; no laboratory values are imputed. Output may contain sensitive input columns if you provide them; manage CSV files accordingly.
+
+## API / Docker
 
 ```bash
-python simulator.py 1000
+uvicorn agents.api:app --host 127.0.0.1 --port 8000
+# Documentation: http://127.0.0.1:8000/docs
 ```
 
-### Test Coverage
+Example POST body for `/api/lille`:
 
-- **Core Formula Tests:** Verify Lille score calculation accuracy
-- **Component Tests:** Validate derived variables (evolution, renal insufficiency)
-- **Response Category Tests:** Confirm classification and survival estimates
-- **Input Validation Tests:** Verify parameter range enforcement
-- **Error Handling Tests:** Confirm graceful handling of invalid inputs
-- **Batch Processing Tests:** Validate CSV processing with error recovery
-- **Security Tests:** Verify PHI guard enforcement and audit integrity
-
----
-
-## 🐳 Container Deployment
-
-```bash
-docker build -t lille-model-alcoholic-hepatitis .
-docker run lille-model-alcoholic-hepatitis
+```json
+{
+  "age": 50,
+  "albumin_day0": 3.5,
+  "bilirubin_day0": 11.6932,
+  "bilirubin_day7": 8.7699,
+  "creatinine": 1.0,
+  "pt_seconds": 18
+}
 ```
 
-Using Docker Compose:
+The Docker image launches the API on port 8000. For Compose, set a **unique** `AUDIT_SECRET_KEY` through your environment before `docker compose up --build`. The optional audit/demo subsystem stores audit events **in process memory**; its regex-based identifier screening is not a guarantee of PHI de-identification or HIPAA compliance. Never expose this unauthenticated API to the public with real patient data.
 
-```bash
-docker-compose up
-```
+## Technical notes
 
-To run the API server:
-```bash
-docker run -p 8000:8000 lille-model-alcoholic-hepatitis python -m agents.api
-```
+- Browser: static HTML, CSS and JavaScript; no backend or Pyodide required. Compatible with current evergreen desktop/mobile browsers.
+- Backend: Python, FastAPI and Pydantic. Auxiliary experimental agent/audit modules remain available through the CLI and API.
+- CI checks Python 3.10, 3.11 and 3.12, reference calculations, browser JavaScript and signature integrity.
+- No personalized six-month survival estimate is returned: the categorical survival figures used previously were not a validated individual prediction.
 
----
+## License
 
-## 📁 Project Structure
-
-```
-lille-model-alcoholic-hepatitis/
-├── .github/workflows/ci.yml    # CI/CD pipeline
-├── agents/                      # Multi-agent enterprise framework
-│   ├── __init__.py
-│   ├── api.py                  # FastAPI REST server
-│   ├── base.py                 # Security, PHI guard, audit trail
-│   ├── learning.py             # Bayesian calibration engine
-│   ├── llm_factory.py          # LLM provider factory
-│   ├── metrics.py              # Prometheus metrics
-│   ├── models.py               # Pydantic schemas
-│   ├── streamer.py             # WebSocket telemetry
-│   ├── supervisor.py           # Orchestrator
-│   └── workers.py              # Specialized domain workers
-├── tests/                      # Test suite
-│   ├── test_enrichment.py
-│   └── test_lille_model_alcoholic_hepatitis.py
-├── web/
-│   └── index.html              # Operations console UI
-├── cli.py                      # CLI entry point
-├── lille_model.py              # Core Lille model implementation
-├── enrichment.py               # Enrichment feature suite
-├── simulator.py                # Stress testing simulator
-├── benchmark_dataset.json      # Golden benchmark test suite
-├── openapi_spec.json           # OpenAPI specification
-├── sample.csv                  # Sample input data
-├── Dockerfile                  # Container build
-├── docker-compose.yml          # Container orchestration
-├── requirements.txt            # Python dependencies
-└── LICENSE                     # MIT License
-```
+[MIT](LICENSE).
