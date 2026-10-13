@@ -7,7 +7,7 @@ A day-7 Lille score calculator for assessing corticosteroid response in **severe
 ## Features
 
 - Louvet et al. (2007) Lille score, range 0–1, with **nonresponse threshold ≥ 0.45**.
-- Day-0 albumin, day-0/day-7 bilirubin, age, creatinine, and **explicit PT (seconds) or INR**.
+- Day-0 albumin, day-0/day-7 bilirubin, age, creatinine (optionally creatinine clearance), and **explicit PT (seconds) or INR**.
 - Correct conversion of albumin **g/dL → g/L** and bilirubin **mg/dL → µmol/L**.
 - Single-patient browser calculation, Python CLI and batch CSV processing.
 - JSON API via FastAPI at `POST /api/lille` plus separate experimental audit/demo endpoints.
@@ -32,7 +32,7 @@ R = 3.19 - 0.101*age + 0.147*albumin_day0
 Lille = exp(-R) / (1 + exp(-R))
 ```
 
-The published INR alternative substitutes INR for PT in the last term. Renal insufficiency was defined in the original model by creatinine >1.3 mg/dL **or** creatinine clearance <40 mL/min. This implementation uses **serum creatinine only** and does not accept a measured creatinine clearance. Interpret this limitation clinically.
+The published INR alternative substitutes INR for PT in the last term. Renal insufficiency was defined in the original model by creatinine >1.3 mg/dL **or** creatinine clearance <40 mL/min. Measured creatinine clearance can be provided optionally; when omitted, classification uses serum creatinine alone. Interpret this limitation clinically.
 
 Reference: Louvet A, et al. *The Lille model: A new tool for therapeutic strategy in patients with severe alcoholic hepatitis treated with steroids.* Hepatology. 2007;45:1348–1354. [doi:10.1002/hep.21607](https://doi.org/10.1002/hep.21607).
 
@@ -47,7 +47,7 @@ python cli.py batch -i sample.csv -o results.csv
 python -m pytest -q
 ```
 
-Use `--inr 2.0` **instead of** `--pt-seconds` when appropriate. CSV needs columns `age,albumin_day0,bilirubin_day0,bilirubin_day7,creatinine` plus `pt_seconds` (or `pt_sec` or `inr`). Aliases `albumin`, `bili_day0` and `bili_day7` are also supported. Rows with invalid/missing measurements are skipped with reported warnings; no laboratory values are imputed. Output may contain sensitive input columns if you provide them; manage CSV files accordingly.
+Optionally provide `--creatinine-clearance 35` when measured clearance is available. Use `--inr 2.0` **instead of** `--pt-seconds` when appropriate. CSV needs columns `age,albumin_day0,bilirubin_day0,bilirubin_day7,creatinine` plus `pt_seconds` (or `pt_sec` or `inr`). Optional `creatinine_clearance` (or `creatinine_clearance_ml_min`) is supported. Aliases `albumin`, `bili_day0` and `bili_day7` are also supported. Rows with invalid/missing measurements are skipped with reported warnings; no laboratory values are imputed. Output may contain sensitive input columns if you provide them; manage CSV files accordingly.
 
 ## API / Docker
 
