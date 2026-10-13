@@ -46,6 +46,11 @@ def test_inr_variant():
     assert result["components"]["coagulation_method"] == "INR"
 
 
+def test_low_creatinine_clearance_sets_renal_insufficiency():
+    assert score(creatinine=1.0, creatinine_clearance=39.9)["components"]["renal_insufficiency"] == 1
+    assert score(creatinine=1.0, creatinine_clearance=40)["components"]["renal_insufficiency"] == 0
+
+
 def test_renal_boundary():
     assert score(creatinine=1.3)["components"]["renal_insufficiency"] == 0
     assert score(creatinine=1.3001)["components"]["renal_insufficiency"] == 1
