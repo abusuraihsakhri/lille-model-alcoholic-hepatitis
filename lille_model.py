@@ -1,29 +1,10 @@
 #!/usr/bin/env python3
-"""
-Lille Model for Alcoholic Hepatitis
-Calculates the Lille score at day 7 of corticosteroid therapy to identify
-non-responders who should discontinue treatment.
+"""Lille model for response after corticosteroid treatment in severe alcohol-associated hepatitis.
 
-Formula:
-  logit = 3.19 - 0.101*age + 0.147*albumin_day0 + 0.165*evolution
-          - 0.206*renal_insufficiency - 0.006*bilirubin_day0
-          + 0.007*bilirubin_day7 - 0.009*bilirubin_evolution
-
-  Where:
-    evolution = bilirubin_day7 - bilirubin_day0
-    bilirubin_evolution = bilirubin_day0 - bilirubin_day7
-    renal_insufficiency = 1 if creatinine > 1.3 mg/dL, else 0
-
-  Lille = 1 / (1 + exp(-logit))
-
-Score range: 0-1
-
-References:
-  - Louvet A, et al. Hepatology 2007;45:1348-54.
-  - Mathurin P, et al. Gastroenterology 2002;123:1736-44.
-
-Author: Dr. Abu Suraih Sakhri
-License: MIT
+Based on Louvet et al., Hepatology (2007), DOI: 10.1002/hep.21607.
+Calculation is performed locally. This score is not a standalone treatment decision.
+Inputs: albumin in g/dL, bilirubin in mg/dL, creatinine in mg/dL and
+either prothrombin time in seconds or INR (explicitly selected).
 """
 
 import argparse
@@ -34,19 +15,31 @@ import sys
 from typing import Dict, Any, Optional
 
 
-def _validate_lille_inputs(age: int, albumin_day0: float, bilirubin_day0: float,
-                           bilirubin_day7: float, creatinine: float) -> None:
-    """Validate input parameters for Lille score calculation."""
-    if not isinstance(age, (int, float)) or age < 0 or age > 120:
-        raise ValueError(f"Age must be between 0 and 120, got {age}")
-    if not isinstance(albumin_day0, (int, float)) or albumin_day0 < 0 or albumin_day0 > 10:
-        raise ValueError(f"Albumin must be between 0 and 10 g/dL, got {albumin_day0}")
-    if not isinstance(bilirubin_day0, (int, float)) or bilirubin_day0 < 0 or bilirubin_day0 > 100:
-        raise ValueError(f"Bilirubin day 0 must be between 0 and 100 mg/dL, got {bilirubin_day0}")
-    if not isinstance(bilirubin_day7, (int, float)) or bilirubin_day7 < 0 or bilirubin_day7 > 100:
-        raise ValueError(f"Bilirubin day 7 must be between 0 and 100 mg/dL, got {bilirubin_day7}")
-    if not isinstance(creatinine, (int, float)) or creatinine < 0 or creatinine > 30:
-        raise ValueError(f"Creatinine must be between 0 and 30 mg/dL, got {creatinine}")
+
+def _validate_lille_inputs(age, albumin_day0, bilirubin_day0,
+                           bilirubin_day7, creatinine, pt_seconds, inr):
+    """Reject missing, non-finite, ambiguous and implausible measurements."""
+    fields = (
+        ("Age", age, 18, 120, "years"),
+        ("Albumin", albumin_day0, 0.1, 10, "g/dL"),
+        ("Bilirubin day 0", bilirubin_day0, 0, 100, "mg/dL"),
+        ("Bilirubin day 7", bilirubin_day7, 0, 100, "mg/dL"),
+        ("Creatinine", creatinine, 0.1, 30, "mg/dL"),
+    )
+    for label, value, low, high, units in fields:
+        if (isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(value) or not low <= value <= high):
+            raise ValueError(f"{label} must be between {low} and {high} {units}; got {value!r}")
+    if (pt_seconds is None) == (inr is None):
+        raise ValueError("Provide exactly one of pt_seconds or inr")
+    if pt_seconds is not None:
+        if (isinstance(pt_seconds, bool) or not isinstance(pt_seconds, (int, float))
+                or not math.isfinite(pt_seconds) or not 5 <= pt_seconds <= 120):
+            raise ValueError("PT must be between 5 and 120 seconds")
+    if inr is not None:
+        if (isinstance(inr, bool) or not isinstance(inr, (int, float))
+                or not math.isfinite(inr) or not 0.5 <= inr <= 15):
+            raise ValueError("INR must be between 0.5 and 15")
 
 
 def calculate_lille(
@@ -55,99 +48,96 @@ def calculate_lille(
     bilirubin_day0: float,
     bilirubin_day7: float,
     creatinine: float,
+    pt_seconds: Optional[float] = None,
+    inr: Optional[float] = None,
 ) -> Dict[str, Any]:
+    """Calculate the validated Louvet Lille score (0 to 1).
+
+    Bilirubin is converted from mg/dL to micromol/L (factor 17.104);
+    albumin is converted from g/dL to g/L (factor 10).
+    R = 3.19 - 0.101*age + 0.147*albumin_g_L
+        + 0.0165*(bilirubin_day0 - bilirubin_day7)_micromol_L
+        - 0.206*renal_insufficiency - 0.0065*bilirubin_day0_micromol_L
+        - 0.0096*(PT_seconds OR INR)
+    Lille = exp(-R) / (1 + exp(-R)).
     """
-    Calculate the Lille Model score for alcoholic hepatitis.
-
-    Parameters:
-        age: Patient age in years
-        albumin_day0: Serum albumin at day 0 in g/dL
-        bilirubin_day0: Serum bilirubin at day 0 in mg/dL
-        bilirubin_day7: Serum bilirubin at day 7 in mg/dL
-        creatinine: Serum creatinine in mg/dL
-
-    Returns:
-        Dict with lille_score, logit, response category, survival estimates,
-        and clinical recommendation.
-
-    Raises:
-        ValueError: If any input parameter is outside valid physiological range.
-    """
-    # Validate inputs
-    _validate_lille_inputs(age, albumin_day0, bilirubin_day0, bilirubin_day7, creatinine)
-
-    # Derived variables
-    evolution = bilirubin_day7 - bilirubin_day0
-    bilirubin_evolution = bilirubin_day0 - bilirubin_day7
-    renal_insufficiency = 1 if creatinine > 1.3 else 0
-
-    # Logit calculation (Louvet et al. 2007)
-    logit = (
-        3.19
-        - 0.101 * age
-        + 0.147 * albumin_day0
-        + 0.165 * evolution
-        - 0.206 * renal_insufficiency
-        - 0.006 * bilirubin_day0
-        + 0.007 * bilirubin_day7
-        - 0.009 * bilirubin_evolution
+    _validate_lille_inputs(
+        age, albumin_day0, bilirubin_day0, bilirubin_day7,
+        creatinine, pt_seconds, inr
     )
-
-    # Lille score = 1 / (1 + e^(-logit))
-    lille_score = 1.0 / (1.0 + math.exp(-logit))
-    lille_score = round(lille_score, 4)
-
-    # Response classification
-    if lille_score < 0.45:
-        response = "Complete Response"
-        recommendation = "Continue corticosteroid therapy. Good prognosis."
-        steroid_decision = "CONTINUE"
-    elif lille_score <= 0.56:
-        response = "Partial Response"
-        recommendation = "Consider continuing steroids with close monitoring. Intermediate prognosis."
-        steroid_decision = "REASSESS"
+    b0 = bilirubin_day0 * 17.104
+    b7 = bilirubin_day7 * 17.104
+    renal_insufficiency = int(creatinine > 1.3)
+    coagulation = pt_seconds if pt_seconds is not None else inr
+    r = (
+        3.19 - 0.101 * age + 0.147 * (albumin_day0 * 10)
+        + 0.0165 * (b0 - b7) - 0.206 * renal_insufficiency
+        - 0.0065 * b0 - 0.0096 * coagulation
+    )
+    # Stable logistic evaluation; classify the unrounded score.
+    if r >= 0:
+        z = math.exp(-r)
+        score = z / (1 + z)
     else:
-        response = "No Response"
-        recommendation = "Consider stopping corticosteroids. Poor prognosis. Evaluate for alternative therapies or palliative care."
-        steroid_decision = "STOP"
+        z = math.exp(r)
+        score = 1 / (1 + z)
 
-    # 6-month survival estimates (Louvet et al. 2007)
-    if lille_score < 0.45:
-        survival_6m = 91.0  # ~91% for complete responders
-    elif lille_score <= 0.56:
-        survival_6m = 60.0  # ~60% for partial responders
-    else:
-        survival_6m = 25.0  # ~25% for non-responders
-
+    nonresponder = score >= 0.45
     return {
         "tool": "lille-model",
-        "lille_score": lille_score,
-        "logit": round(logit, 4),
-        "response_category": response,
-        "steroid_decision": steroid_decision,
-        "recommendation": recommendation,
-        "estimated_6m_survival_percent": survival_6m,
+        "lille_score": round(score, 4),
+        "linear_predictor": round(r, 6),
+        "logit": round(-r, 6),
+        "response_category": "Non-responder" if nonresponder else "Responder",
+        "steroid_decision": "REASSESS" if nonresponder else "CONSIDER_CONTINUATION",
+        "recommendation": (
+            "Lille >= 0.45: treatment nonresponse; promptly review corticosteroid "
+            "discontinuation with the treating clinical team."
+            if nonresponder else
+            "Lille < 0.45: response is more likely; review continued treatment "
+            "with the treating clinical team."
+        ),
+        "estimated_6m_survival_percent": None,
         "components": {
             "age": age,
             "albumin_day0": albumin_day0,
             "bilirubin_day0": bilirubin_day0,
             "bilirubin_day7": bilirubin_day7,
             "creatinine": creatinine,
-            "evolution": round(evolution, 4),
-            "bilirubin_evolution": round(bilirubin_evolution, 4),
+            "pt_seconds": pt_seconds,
+            "inr": inr,
+            "coagulation_method": "PT" if pt_seconds is not None else "INR",
+            "evolution": round(bilirubin_day7 - bilirubin_day0, 4),
+            "bilirubin_evolution": round(bilirubin_day0 - bilirubin_day7, 4),
             "renal_insufficiency": renal_insufficiency,
         },
     }
 
 
 def calculate_lille_from_dict(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Calculate Lille score from a dictionary of parameters."""
+    """Calculate using named fields, with no fabricated default lab values."""
+    def required(*names):
+        for name in names:
+            value = params.get(name)
+            if value is not None and str(value).strip() != "":
+                try:
+                    return float(value)
+                except (ValueError, TypeError) as exc:
+                    raise ValueError(f"Invalid value for {name}: {value!r}") from exc
+        raise ValueError(f"Missing required value: {names[0]}")
+
+    pt_value = params.get("pt_seconds", params.get("pt_sec"))
+    inr_value = params.get("inr")
+    pt_seconds = None if pt_value is None or str(pt_value).strip() == "" else required("pt_seconds", "pt_sec")
+    inr = None if inr_value is None or str(inr_value).strip() == "" else required("inr")
     return calculate_lille(
-        age=int(float(params.get("age", 50))),
-        albumin_day0=float(params.get("albumin_day0") or params.get("albumin", 3.0)),
-        bilirubin_day0=float(params.get("bilirubin_day0") or params.get("bili_day0", 10.0)),
-        bilirubin_day7=float(params.get("bilirubin_day7") or params.get("bili_day7", 10.0)),
-        creatinine=float(params.get("creatinine", 1.0)),
+        age=required("age"),
+        albumin_day0=required("albumin_day0", "albumin"),
+        bilirubin_day0=required("bilirubin_day0", "bili_day0"),
+        bilirubin_day7=required("bilirubin_day7", "bili_day7"),
+        creatinine=required("creatinine"),
+        pt_seconds=pt_seconds,
+        inr=inr,
     )
 
 
@@ -195,12 +185,14 @@ def process_batch(input_csv: str, output_csv: str) -> int:
                 raise ValueError(f"Missing required columns: {still_missing}. "
                                  f"Available columns: {fieldnames}")
 
+        if not ({"pt_seconds", "pt_sec", "inr"} & available_cols):
+            raise ValueError("Missing required column: pt_seconds or inr")
         rows = list(reader)
 
-    out_fields = fieldnames + [
+    out_fields = list(dict.fromkeys(fieldnames + [
         "lille_score", "response_category", "steroid_decision",
         "estimated_6m_survival_percent", "recommendation",
-    ]
+    ]))
     out_rows = []
     errors = []
     for idx, r in enumerate(rows):
@@ -259,6 +251,10 @@ def main(argv=None):
     p_single.add_argument("--creatinine", type=float, required=True,
                           help="Serum creatinine (mg/dL)")
 
+    coag = p_single.add_mutually_exclusive_group(required=True)
+    coag.add_argument("--pt-seconds", type=float, help="Prothrombin time (seconds)")
+    coag.add_argument("--inr", type=float, help="INR alternative from Louvet 2007")
+
     # Batch processing
     p_batch = subparsers.add_parser("batch", help="Batch process CSV file")
     p_batch.add_argument("-i", "--input", required=True, help="Input CSV file")
@@ -288,6 +284,8 @@ def main(argv=None):
             bilirubin_day0=args.bilirubin_day0,
             bilirubin_day7=args.bilirubin_day7,
             creatinine=args.creatinine,
+            pt_seconds=args.pt_seconds,
+            inr=args.inr,
         )
         print(json.dumps(result, indent=2))
 
