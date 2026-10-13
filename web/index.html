@@ -92,12 +92,14 @@ code{background:#ecf1f7;border-radius:4px;padding:2px 5px}
   method.addEventListener("change", updateMode);
   document.getElementById("example").addEventListener("click", function () {
     method.value = "pt"; updateMode();
+    document.getElementById("crcl").value = "";
     const example = [50, 3.5, 200 / 17.104, 150 / 17.104, 1.0, 18];
     ids.forEach(function(id, i) { document.getElementById(id).value = example[i]; });
     error.textContent = "";
     result.textContent = "Illustrative measurements loaded; click Calculate Lille score.";
   });
   form.addEventListener("reset", function () {
+    method.value = "pt"; updateMode();
     error.textContent = "";
     result.textContent = "Enter measurements and calculate.";
   });
