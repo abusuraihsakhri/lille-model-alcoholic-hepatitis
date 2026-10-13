@@ -145,6 +145,10 @@
                   },
                   "inr": {
                     "type": "number"
+                  },
+                  "creatinine_clearance": {
+                    "type": "number",
+                    "description": "Optional measured creatinine clearance (mL/min)"
                   }
                 },
                 "required": [
