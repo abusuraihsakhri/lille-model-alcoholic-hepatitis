@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional
 
 
 def _validate_lille_inputs(age, albumin_day0, bilirubin_day0,
-                           bilirubin_day7, creatinine, pt_seconds, inr):
+                           bilirubin_day7, creatinine, pt_seconds, inr, creatinine_clearance):
     """Reject missing, non-finite, ambiguous and implausible measurements."""
     fields = (
         ("Age", age, 18, 120, "years"),
@@ -30,6 +30,12 @@ def _validate_lille_inputs(age, albumin_day0, bilirubin_day0,
         if (isinstance(value, bool) or not isinstance(value, (int, float))
                 or not math.isfinite(value) or not low <= value <= high):
             raise ValueError(f"{label} must be between {low} and {high} {units}; got {value!r}")
+    if creatinine_clearance is not None:
+        if (isinstance(creatinine_clearance, bool)
+                or not isinstance(creatinine_clearance, (int, float))
+                or not math.isfinite(creatinine_clearance)
+                or not 0.1 <= creatinine_clearance <= 300):
+            raise ValueError("Creatinine clearance must be between 0.1 and 300 mL/min")
     if (pt_seconds is None) == (inr is None):
         raise ValueError("Provide exactly one of pt_seconds or inr")
     if pt_seconds is not None:
@@ -50,6 +56,7 @@ def calculate_lille(
     creatinine: float,
     pt_seconds: Optional[float] = None,
     inr: Optional[float] = None,
+    creatinine_clearance: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Calculate the validated Louvet Lille score (0 to 1).
 
@@ -63,11 +70,11 @@ def calculate_lille(
     """
     _validate_lille_inputs(
         age, albumin_day0, bilirubin_day0, bilirubin_day7,
-        creatinine, pt_seconds, inr
+        creatinine, pt_seconds, inr, creatinine_clearance
     )
     b0 = bilirubin_day0 * 17.104
     b7 = bilirubin_day7 * 17.104
-    renal_insufficiency = int(creatinine > 1.3)
+    renal_insufficiency = int(creatinine > 1.3 or (creatinine_clearance is not None and creatinine_clearance < 40))
     coagulation = pt_seconds if pt_seconds is not None else inr
     r = (
         3.19 - 0.101 * age + 0.147 * (albumin_day0 * 10)
@@ -104,6 +111,7 @@ def calculate_lille(
             "bilirubin_day0": bilirubin_day0,
             "bilirubin_day7": bilirubin_day7,
             "creatinine": creatinine,
+            "creatinine_clearance": creatinine_clearance,
             "pt_seconds": pt_seconds,
             "inr": inr,
             "coagulation_method": "PT" if pt_seconds is not None else "INR",
@@ -138,6 +146,10 @@ def calculate_lille_from_dict(params: Dict[str, Any]) -> Dict[str, Any]:
         creatinine=required("creatinine"),
         pt_seconds=pt_seconds,
         inr=inr,
+        creatinine_clearance=(required("creatinine_clearance", "creatinine_clearance_ml_min")
+                              if any(str(params.get(k, "")).strip() not in ("", "None")
+                                     for k in ("creatinine_clearance", "creatinine_clearance_ml_min"))
+                              else None),
     )
 
 
@@ -255,6 +267,8 @@ def main(argv=None):
     coag.add_argument("--pt-seconds", type=float, help="Prothrombin time (seconds)")
     coag.add_argument("--inr", type=float, help="INR alternative from Louvet 2007")
 
+    p_single.add_argument("--creatinine-clearance", type=float, help="Optional measured creatinine clearance (mL/min)")
+
     # Batch processing
     p_batch = subparsers.add_parser("batch", help="Batch process CSV file")
     p_batch.add_argument("-i", "--input", required=True, help="Input CSV file")
@@ -286,6 +300,7 @@ def main(argv=None):
             creatinine=args.creatinine,
             pt_seconds=args.pt_seconds,
             inr=args.inr,
+            creatinine_clearance=args.creatinine_clearance,
         )
         print(json.dumps(result, indent=2))
 
