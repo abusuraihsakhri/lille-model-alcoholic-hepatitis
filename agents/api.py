@@ -5,6 +5,7 @@ from typing import Dict, Any, List
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from .base import AuditLogger, PHIGuard
+from lille_model import calculate_lille
 from .models import SystemTaskPayload, ConsensusDossier
 from .supervisor import SystemSupervisor
 
@@ -15,6 +16,24 @@ app = FastAPI(
     description="Enterprise Distributed Component Platform (Clinical & Biomedical AI)",
     version="3.0.0-ENTERPRISE",
 )
+
+
+class LilleRequest(BaseModel):
+    age: int
+    albumin_day0: float
+    bilirubin_day0: float
+    bilirubin_day7: float
+    creatinine: float
+    pt_seconds: float | None = None
+    inr: float | None = None
+
+
+@app.post("/api/lille")
+def api_lille(payload: LilleRequest):
+    try:
+        return calculate_lille(**payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 class ChatRequest(BaseModel):
