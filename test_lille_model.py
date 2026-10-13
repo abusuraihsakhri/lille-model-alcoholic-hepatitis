@@ -90,9 +90,9 @@ def test_csv_skips_invalid_without_inventing_data(tmp_path, capsys):
     source = tmp_path / "source.csv"
     output = tmp_path / "results.csv"
     source.write_text(
-        "id,age,albumin_day0,bilirubin_day0,bilirubin_day7,creatinine,pt_seconds\\n"
-        "good,50,3.5,12,10,1,18\\n"
-        "bad,50,3.5,12,,1,18\\n", encoding="utf8")
+        "id,age,albumin_day0,bilirubin_day0,bilirubin_day7,creatinine,pt_seconds\n"
+        "good,50,3.5,12,10,1,18\n"
+        "bad,50,3.5,12,,1,18\n", encoding="utf8")
     assert process_batch(str(source), str(output)) == 1
     with output.open(encoding="utf8", newline="") as fh:
         rows = list(csv.DictReader(fh))
@@ -103,8 +103,8 @@ def test_csv_skips_invalid_without_inventing_data(tmp_path, capsys):
 def test_csv_missing_coagulation_rejected(tmp_path):
     source = tmp_path / "source.csv"
     source.write_text(
-        "age,albumin_day0,bilirubin_day0,bilirubin_day7,creatinine\\n"
-        "50,3.5,12,10,1\\n", encoding="utf8")
+        "age,albumin_day0,bilirubin_day0,bilirubin_day7,creatinine\n"
+        "50,3.5,12,10,1\n", encoding="utf8")
     with pytest.raises(ValueError, match="pt_seconds or inr"):
         process_batch(str(source), str(tmp_path / "results.csv"))
 
